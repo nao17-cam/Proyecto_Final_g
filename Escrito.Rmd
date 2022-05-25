@@ -1,0 +1,159 @@
+---
+title: "Proyecto_Final"
+author: "Bautista&Camargo"
+date: "24/5/2022"
+output: html_document
+---
+
+**Análisis de Diversidad Bacteriana en mujeres durante el embarazo y su relación en la TPL y PTB** Basado en el estudio "Análisis bioinformático de perfiles microbianos orales, vaginales y rectales durante el embarazo: un estudio piloto sobre la coexistencia bacteriana en mujeres embarazadas"-Megumi Fundaba y col (2021).
+
+#### **Introducción**
+
+    En el embarazo se han observado complicaciones obstétricas frecuentres como la amenza de trabajo de parto prematuro (TPL) y el parto prematuro (PTB). Traen en los bebés prematuros consecuencias como dificultad respiratoria, hemorragia y parálisis cerebral. Las estrategias contra el TPB y el PTB no han resultado efectivas.       
+
+    Antecedentes genéticos como la microbiota vaginal influyen en el TPL y PTB. Durante las infecciones de vaginosis bacteriana la dominancia de Lactobacillus es un factor de riesgo que conduce al PTB. En mujeres que no presentan la infección los Lactobacillus mantienen la homeostasis vaginal y protegen al tracto reproductivo, mediante la producción de peróxidos de hidrógeno y ácido láctico.  
+
+#### **Diseño experimental (Construcción de la base de datos)**
+
+    -> Se recolectaron muestras de saliva, fluido vaginal y heces de 58 mujeres 
+    embarazadas, provenientes de Osaka Japón.
+
+    -Criterios de inclusión 
+     1. Embarazo único
+     2. Mujeres embarazadas que recibieron  manejo perinatal en el hospital de la ciudad de Osaka
+    -Criterios excluidos 
+     1. Embarazo múltiple
+     2. Anomalía fetal
+     3. Restricción del crecimiento fetal
+     
+    La edad de las mujeres era de 21 a 41 años.Se definió como PTB al parto antes de la semana 37 de gestación. 
+
+    -> Los participantes se dividieron en grupos: 
+     1. Grupo de vaginal dominado por Lactobacillus (LD) 
+
+     2. Grupo no dominado por Lactobacillus 
+    Las muestras se recolectaron entre las 28 y 29 semanas de gestación. 
+
+    -> La extracción de ADN bacteriano de las muestras se realizo por BIKEN Biomics Inc. 
+    -> Se amplificó y secuenció el gen 16S Ribosomal RNA.
+    -> Se prepararón las de bibliotecas de ADN realizadas por BIKEN Biomics. Mediante la Guía de secuenciación metagenómica 16S Ilumina, los cebadores fueron 27Fmod (5′-AGRGTTTGATCMTGGCTCAG-3′) y 338R (5′-TGCTGCCTCCCGTAGGAGT-3′) dirigidos a la región hipervariable V1 - V2 del gen bacteriano 16S rRNA. Se analizaron mediante secuenciación de extremos pareados con un sistema MiSeq.
+    -> Para el perfil de microbioma vaginal, oral y fecal. Se uso el software R. Las secuencias de extremos emparejados obtenidas se eliminaron y fusionaron usando la biblioteca de DADA2 de R. 
+
+#### **Metodología y resultados.**
+
+Cargamos las librerías que usaremos a lo largo de los análisis
+
+```{r}
+library(phyloseq)
+library(igraph)
+library(MGnifyR)
+library(vegan)
+library(ggplot2)
+library(readxl)
+library(corrplot)
+library(gclus)
+library(igraphdata)
+```
+
+Para pasar la base de datos extraida de MGnify
+
+```{r}
+mg <- mgnify_client(usecache = T, cache_dir = '/tmp/mgnify_cache')
+
+mgnify_study_accession <- "MGYS00005745"              
+analyses_accessions <- mgnify_analyses_from_studies(mg, mgnify_study_accession)
+analyses_accessions
+
+analyses_metadata_df <- mgnify_get_analyses_metadata(mg, analyses_accessions)
+analyses_metadata_df
+```
+
+Convertimos a Phyloseq
+
+```{r}
+analyses_ps <- mgnify_get_analyses_phyloseq(mg, analyses_metadata_df$analysis_accession, tax_SU = "SSU")
+analyses_ps
+View(analyses_metadata_df)
+```
+
+Convertimos\* a matriz y corregimos de forma que podamos manejar para los futuros análisis \*\*
+
+```{r}
+matriz<-as.matrix(otu_table(analyses_ps)) #Se convierte a matriz la tabla de OTUS a tráves de "as.matrix"
+View(matriz) #Visualizamos la matriz
+taxa<-as.matrix(tax_table(analyses_ps)) #Se convierte a matriz la tabla de taxa a tráves de "as.matrix"
+View(taxa) #Visualizamos la matriz
+```
+
+Histograma y barplot de OTUs
+
+```{r}
+hist(matriz [,3])
+barplot(matriz, col=matriz[,1])
+```
+
+Análisis de riqueza
+
+```{r}
+richness <- colSums(matriz != 0) #Saca las medidas de diversidad
+richness #Arroja los resultados de las medidas de diversidad
+barplot(richness) #Permite visualizar las medidas de diversidad
+```
+
+Análisis de diversidad
+
+```{r}
+plot_richness(matriz)
+indices<-read_xlsx("C:/Users/naomi/Downloads/muestras_indices.xlsx")# Se carga la base de datos
+View(indices) #Se visualiza
+index<-as.matrix(indices) #Se convierte en matriz
+
+#Observación desde el índice de Shannon
+shannon <- ggplot(indices, aes(x=tissue_LD, y=Shannon, fill =tissue_LD)) + 
+  geom_boxplot()
+shannon
+
+#Observación desde el índice de pielou
+pielou <- ggplot(indices, aes(x=tissue_LD, y=`Pielou's evenness index`, fill=tissue_LD)) + 
+    geom_boxplot()
+pielou
+
+```
+
+Correlaciones
+
+```{r}
+cor<-read_xlsx("C:/Users/naomi/Downloads/cor.xlsx") #Cargamos la base de datos
+corr<-as.matrix(cor) #Se convierte en matriz, mediante la función "as.matrix"
+View(cor) #Se visualiza la matriz
+
+correlacion<-cor[,-1] #Se elimina la columna 1
+varianza <-var(correlacion) #Se saca la varianza
+View(varianza) #Se visualiza la modificación al agregar varianza 
+
+heatmap(varianza) #Se realiza un heatmap para observar las correlaciones 
+
+
+```
+
+Red
+
+```{r}
+cor2<-(1+varianza)/2
+diag(cor2)<-0 
+
+red0<-ifelse(cor2>0.5,1,0)
+View(red0)
+
+red1<-graph_from_adjacency_matrix(red0)
+plot(red1, layout=layout.sphere, main="sphere")
+
+```
+
+#### Discusión
+
+    Se examinaron las especies específicas de microorganismos en mujeres embarazadas y se comprobó que el recto es un reservorio de la microbiota vaginal.
+
+#### Conclusión
+
+    Se proporciona evidencia de la coexistencia bacteriana específica en la vagina y el recto, y que ambos podrían ser el objetivo para reducir el riesgo de incidencia de prematuros en el embarazo.
